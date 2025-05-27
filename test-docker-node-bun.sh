@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Bun + Express Memory Leak Reproduction Test Script (Docker Version)
-# This script automates the reproduction steps using Docker for easy testing
+# Bun-in-Node.js Docker Memory Leak Reproduction Test Script
+# This script tests Bun runtime inside a Node.js 24.0.2 container to isolate runtime vs container issues
 
 set -e
 
-echo "🔬 Bun + Express Memory Leak Reproduction Test (Docker)"
-echo "======================================================"
+echo "🔬 Bun-in-Node.js Docker Memory Leak Reproduction Test"
+echo "===================================================="
 
 # Colors for output
 RED='\033[0;31m'
@@ -36,12 +36,12 @@ echo "Date: $(date)"
 echo ""
 
 # Build Docker image
-echo -e "${BLUE}🏗️  Building Docker image...${NC}"
-docker build -t bun-memory-leak-repro .
+echo -e "${BLUE}🏗️  Building Bun-in-Node.js Docker image...${NC}"
+docker build -f Dockerfile.node-bun -t node-bun-memory-leak-repro .
 
 # Start container in background
-echo -e "${BLUE}🚀 Starting Docker container...${NC}"
-CONTAINER_ID=$(docker run -d -p 3000:3000 --name bun-memory-leak-test bun-memory-leak-repro)
+echo -e "${BLUE}🚀 Starting Bun-in-Node.js Docker container...${NC}"
+CONTAINER_ID=$(docker run -d -p 3000:3000 --name node-bun-memory-leak-test node-bun-memory-leak-repro)
 
 # Function to cleanup container
 cleanup_container() {
@@ -81,12 +81,14 @@ if ! check_server; then
     exit 1
 fi
 
-echo -e "${GREEN}✅ Docker container is running and server is ready${NC}"
+echo -e "${GREEN}✅ Bun-in-Node.js Docker container is running and server is ready${NC}"
 
 # Show container info
 echo -e "${BLUE}📦 Container Information:${NC}"
 echo "Container ID: $CONTAINER_ID"
-echo "Image: bun-memory-leak-repro"
+echo "Base Image: Node.js 24.0.2-slim"
+echo "Runtime: Bun (installed inside Node.js container)"
+echo "Image: node-bun-memory-leak-repro"
 echo ""
 
 # Function to get memory stats (HTTP objects)
@@ -116,10 +118,10 @@ get_all_object_counts() {
     fi
 }
 
-# Function to get top object types
-get_top_objects() {
+# Function to get heap analysis (if available)
+get_heap_analysis() {
     if $JQ_AVAILABLE; then
-        curl -s http://localhost:3000/memory | jq '.heap.analysis.topObjectTypes'
+        curl -s http://localhost:3000/memory | jq '.heap.analysis.httpObjects // null'
     else
         curl -s http://localhost:3000/memory
     fi
@@ -164,6 +166,10 @@ if $JQ_AVAILABLE; then
         BASELINE_STRINGS=$(echo "$BASELINE_ALL" | jq -r '.String // 0')
         
         echo "Additional Baseline - Promises: $BASELINE_PROMISES, Arrays: $BASELINE_ARRAYS, Functions: $BASELINE_FUNCTIONS, Objects: $BASELINE_OBJECTS, Strings: $BASELINE_STRINGS"
+        TRACK_OBJECTS=true
+    else
+        echo "Bun heap object tracking not available in this environment"
+        TRACK_OBJECTS=false
     fi
 fi
 
@@ -235,7 +241,7 @@ if $JQ_AVAILABLE; then
     echo ""
     
     # Check additional object types if available
-    if [ -n "$BASELINE_PROMISES" ]; then
+    if [ "$TRACK_OBJECTS" = true ]; then
         POST_ALL=$(get_all_object_counts)
         if [ "$POST_ALL" != "null" ] && [ -n "$POST_ALL" ]; then
             POST_PROMISES=$(echo "$POST_ALL" | jq -r '.Promise // 0')
@@ -267,7 +273,7 @@ if $JQ_AVAILABLE; then
     echo -e "${BLUE}📊 Leak Rates (objects per request):${NC}"
     echo "Headers: ~$HEADERS_LEAK_RATE"
     echo "NodeHTTPResponse: ~$RESPONSES_LEAK_RATE"
-    if [ -n "$PROMISES_DIFF" ]; then
+    if [ "$TRACK_OBJECTS" = true ] && [ -n "$PROMISES_DIFF" ]; then
         PROMISES_LEAK_RATE=$(echo "scale=2; $PROMISES_DIFF / 1000" | bc 2>/dev/null || echo "~$((PROMISES_DIFF / 1000))")
         echo "Promises: ~$PROMISES_LEAK_RATE"
     fi
@@ -292,7 +298,7 @@ if $JQ_AVAILABLE; then
     fi
     
     # Check general objects if available
-    if [ -n "$PROMISES_DIFF" ]; then
+    if [ "$TRACK_OBJECTS" = true ] && [ -n "$PROMISES_DIFF" ]; then
         if [ $PROMISES_DIFF -gt 5000 ] || [ $FUNCTIONS_DIFF -gt 10000 ] || [ $ARRAYS_DIFF -gt 20000 ]; then
             LEAK_DETECTED=true
             LEAK_SEVERITY="critical"
@@ -309,21 +315,21 @@ if $JQ_AVAILABLE; then
     # Report findings
     if [ "$LEAK_DETECTED" = true ]; then
         if [ "$LEAK_SEVERITY" = "critical" ]; then
-            echo -e "${RED}🚨 CRITICAL MEMORY LEAK DETECTED!${NC}"
+            echo -e "${RED}🚨 CRITICAL MEMORY LEAK DETECTED IN BUN-IN-NODE CONTAINER!${NC}"
             echo "Significant object count increases detected in: ${LEAK_TYPES[*]}"
-            echo "This confirms a serious memory leak issue."
+            echo "This confirms the leak is in Bun runtime, not containerization!"
         else
-            echo -e "${YELLOW}⚠️  MODERATE MEMORY LEAK DETECTED${NC}"
+            echo -e "${YELLOW}⚠️  MODERATE MEMORY LEAK DETECTED IN BUN-IN-NODE CONTAINER${NC}"
             echo "Some objects are not being garbage collected properly in: ${LEAK_TYPES[*]}"
             echo "Monitor for continued growth over time."
         fi
     else
-        echo -e "${GREEN}✅ No significant memory leak detected${NC}"
+        echo -e "${GREEN}✅ No significant memory leak detected in Bun-in-Node container${NC}"
         echo "Object counts remained relatively stable across all monitored types."
     fi
 fi
 
-# Wait and check again
+# Wait and check for continued growth
 echo -e "${BLUE}⏳ Waiting 2 minutes to check for continued growth...${NC}"
 sleep 120
 
@@ -352,7 +358,7 @@ if $JQ_AVAILABLE; then
     echo ""
     
     # Check continued growth in general objects if available
-    if [ -n "$POST_PROMISES" ]; then
+    if [ "$TRACK_OBJECTS" = true ] && [ -n "$POST_PROMISES" ]; then
         DELAYED_ALL=$(get_all_object_counts)
         if [ "$DELAYED_ALL" != "null" ] && [ -n "$DELAYED_ALL" ]; then
             DELAYED_PROMISES=$(echo "$DELAYED_ALL" | jq -r '.Promise // 0')
@@ -382,7 +388,7 @@ if $JQ_AVAILABLE; then
     fi
     
     # Check general objects for continued growth if available
-    if [ -n "$DELAYED_PROMISES_DIFF" ]; then
+    if [ "$TRACK_OBJECTS" = true ] && [ -n "$DELAYED_PROMISES_DIFF" ]; then
         if [ $DELAYED_PROMISES_DIFF -gt 100 ] || [ $DELAYED_ARRAYS_DIFF -gt 500 ] || [ $DELAYED_FUNCTIONS_DIFF -gt 1000 ]; then
             CONTINUED_GROWTH=true
             GROWTH_TYPES+=("general objects")
@@ -390,11 +396,11 @@ if $JQ_AVAILABLE; then
     fi
     
     if [ "$CONTINUED_GROWTH" = true ]; then
-        echo -e "${RED}🚨 OBJECTS CONTINUE TO GROW WITHOUT REQUESTS!${NC}"
+        echo -e "${RED}🚨 OBJECTS CONTINUE TO GROW WITHOUT REQUESTS IN BUN-IN-NODE!${NC}"
         echo "Continued growth detected in: ${GROWTH_TYPES[*]}"
-        echo "This indicates ongoing background activity or a severe leak."
+        echo "This indicates ongoing background activity or a severe Bun runtime leak."
     else
-        echo -e "${GREEN}✅ Object growth has stabilized${NC}"
+        echo -e "${GREEN}✅ Object growth has stabilized in Bun-in-Node container${NC}"
         echo "No significant continued growth detected across all monitored object types."
     fi
 fi
@@ -403,22 +409,25 @@ fi
 echo -e "${BLUE}📋 Container logs (last 20 lines):${NC}"
 docker logs --tail 20 $CONTAINER_ID
 
-echo -e "${GREEN}✅ Test completed!${NC}"
+echo -e "${GREEN}✅ Bun-in-Node.js test completed!${NC}"
 echo ""
-echo -e "${BLUE}📋 Summary:${NC}"
-echo "- Environment: Docker container (bun-memory-leak-repro)"
-echo "- Load test: 1000 requests completed"
-echo "- Duration: ${DURATION} seconds"
+echo -e "${BLUE}📋 Bun-in-Node.js Test Summary:${NC}"
+echo "Duration: $DURATION seconds"
+echo "Base Container: Node.js 24.0.2-slim"
+echo "Runtime: Bun (installed inside Node.js container)"
+echo "Container: node-bun-memory-leak-repro"
 if $JQ_AVAILABLE; then
-    echo "- Memory growth: RSS +${RSS_DIFF}MB, HeapUsed +${HEAP_USED_DIFF}MB"
-    echo "- HTTP Objects leak: +$HEADERS_DIFF Headers, +$RESPONSES_DIFF NodeHTTPResponse, +$SOCKETS_DIFF Sockets"
-    echo "- Leak rates: Headers ~$HEADERS_LEAK_RATE, Responses ~$RESPONSES_LEAK_RATE per request"
-    if [ -n "$PROMISES_DIFF" ]; then
-        echo "- General Objects leak: +$PROMISES_DIFF Promises, +$ARRAYS_DIFF Arrays, +$FUNCTIONS_DIFF Functions"
+    echo "Memory growth: RSS +${RSS_DIFF}MB, HeapUsed +${HEAP_USED_DIFF}MB"
+    echo "HTTP Objects leak: +$HEADERS_DIFF Headers, +$RESPONSES_DIFF NodeHTTPResponse, +$SOCKETS_DIFF Sockets"
+    if [ "$TRACK_OBJECTS" = true ] && [ -n "$PROMISES_DIFF" ]; then
+        echo "General Objects leak: +$PROMISES_DIFF Promises, +$ARRAYS_DIFF Arrays, +$FUNCTIONS_DIFF Functions"
     fi
-    if [ "$LEAK_DETECTED" = true ]; then
-        echo "- Leak severity: $LEAK_SEVERITY in ${LEAK_TYPES[*]}"
-    fi
+    echo "Leak severity: $LEAK_SEVERITY"
 fi
 echo ""
-echo "Please share these results with the Bun development team." 
+echo -e "${BLUE}🔬 Isolation Test Results:${NC}"
+echo "This test isolates whether memory leaks are due to:"
+echo "- Bun runtime itself (if leaks occur here)"
+echo "- Bun's Docker image environment (if no leaks occur here)"
+echo ""
+echo -e "${GREEN}✅ Compare with other test results for comprehensive analysis!${NC}" 

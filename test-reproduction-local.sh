@@ -91,10 +91,19 @@ echo "Server PID: $SERVER_PID"
 echo "Environment: Local Bun execution"
 echo ""
 
-# Function to get memory stats
+# Function to get memory stats (HTTP objects)
 get_memory_stats() {
     if $JQ_AVAILABLE; then
         curl -s http://localhost:3000/memory | jq '.heap.analysis.httpObjects'
+    else
+        curl -s http://localhost:3000/memory
+    fi
+}
+
+# Function to get memory usage (MB)
+get_memory_usage() {
+    if $JQ_AVAILABLE; then
+        curl -s http://localhost:3000/memory | jq '.memory.usage'
     else
         curl -s http://localhost:3000/memory
     fi
@@ -125,6 +134,11 @@ BASELINE=$(get_memory_stats)
 echo "$BASELINE"
 echo ""
 
+echo "Baseline Memory Usage:"
+BASELINE_MEMORY=$(get_memory_usage)
+echo "$BASELINE_MEMORY"
+echo ""
+
 # Extract baseline numbers if jq is available
 if $JQ_AVAILABLE; then
     BASELINE_HEADERS=$(echo "$BASELINE" | jq -r '.Headers')
@@ -132,7 +146,14 @@ if $JQ_AVAILABLE; then
     BASELINE_ARGUMENTS=$(echo "$BASELINE" | jq -r '.Arguments')
     BASELINE_SOCKETS=$(echo "$BASELINE" | jq -r '.NodeHTTPServerSocket')
     
+    # Extract memory usage baseline
+    BASELINE_RSS=$(echo "$BASELINE_MEMORY" | jq -r '.rss')
+    BASELINE_HEAP_USED=$(echo "$BASELINE_MEMORY" | jq -r '.heapUsed')
+    BASELINE_HEAP_TOTAL=$(echo "$BASELINE_MEMORY" | jq -r '.heapTotal')
+    BASELINE_EXTERNAL=$(echo "$BASELINE_MEMORY" | jq -r '.external')
+    
     echo "Baseline - Headers: $BASELINE_HEADERS, NodeHTTPResponse: $BASELINE_RESPONSES, Arguments: $BASELINE_ARGUMENTS, Sockets: $BASELINE_SOCKETS"
+    echo "Baseline Memory - RSS: ${BASELINE_RSS}MB, HeapUsed: ${BASELINE_HEAP_USED}MB, HeapTotal: ${BASELINE_HEAP_TOTAL}MB, External: ${BASELINE_EXTERNAL}MB"
     
     # Get additional object types for comprehensive leak detection
     echo -e "${BLUE}📊 Getting comprehensive baseline object counts...${NC}"
@@ -172,6 +193,11 @@ POST_LOAD=$(get_memory_stats)
 echo "$POST_LOAD"
 echo ""
 
+echo "Post-Load-Test Memory Usage:"
+POST_LOAD_MEMORY=$(get_memory_usage)
+echo "$POST_LOAD_MEMORY"
+echo ""
+
 # Calculate differences if jq is available
 if $JQ_AVAILABLE; then
     POST_HEADERS=$(echo "$POST_LOAD" | jq -r '.Headers')
@@ -179,16 +205,35 @@ if $JQ_AVAILABLE; then
     POST_ARGUMENTS=$(echo "$POST_LOAD" | jq -r '.Arguments')
     POST_SOCKETS=$(echo "$POST_LOAD" | jq -r '.NodeHTTPServerSocket')
     
+    # Extract memory usage post-load
+    POST_RSS=$(echo "$POST_LOAD_MEMORY" | jq -r '.rss')
+    POST_HEAP_USED=$(echo "$POST_LOAD_MEMORY" | jq -r '.heapUsed')
+    POST_HEAP_TOTAL=$(echo "$POST_LOAD_MEMORY" | jq -r '.heapTotal')
+    POST_EXTERNAL=$(echo "$POST_LOAD_MEMORY" | jq -r '.external')
+    
     HEADERS_DIFF=$((POST_HEADERS - BASELINE_HEADERS))
     RESPONSES_DIFF=$((POST_RESPONSES - BASELINE_RESPONSES))
     ARGUMENTS_DIFF=$((POST_ARGUMENTS - BASELINE_ARGUMENTS))
     SOCKETS_DIFF=$((POST_SOCKETS - BASELINE_SOCKETS))
+    
+    # Calculate memory differences
+    RSS_DIFF=$((POST_RSS - BASELINE_RSS))
+    HEAP_USED_DIFF=$((POST_HEAP_USED - BASELINE_HEAP_USED))
+    HEAP_TOTAL_DIFF=$((POST_HEAP_TOTAL - BASELINE_HEAP_TOTAL))
+    EXTERNAL_DIFF=$((POST_EXTERNAL - BASELINE_EXTERNAL))
     
     echo -e "${BLUE}📈 HTTP Objects Memory Leak Analysis:${NC}"
     echo "Headers: $BASELINE_HEADERS → $POST_HEADERS (+$HEADERS_DIFF)"
     echo "NodeHTTPResponse: $BASELINE_RESPONSES → $POST_RESPONSES (+$RESPONSES_DIFF)"
     echo "Arguments: $BASELINE_ARGUMENTS → $POST_ARGUMENTS (+$ARGUMENTS_DIFF)"
     echo "NodeHTTPServerSocket: $BASELINE_SOCKETS → $POST_SOCKETS (+$SOCKETS_DIFF)"
+    echo ""
+    
+    echo -e "${BLUE}📈 Memory Usage Analysis:${NC}"
+    echo "RSS: ${BASELINE_RSS}MB → ${POST_RSS}MB (+${RSS_DIFF}MB)"
+    echo "HeapUsed: ${BASELINE_HEAP_USED}MB → ${POST_HEAP_USED}MB (+${HEAP_USED_DIFF}MB)"
+    echo "HeapTotal: ${BASELINE_HEAP_TOTAL}MB → ${POST_HEAP_TOTAL}MB (+${HEAP_TOTAL_DIFF}MB)"
+    echo "External: ${BASELINE_EXTERNAL}MB → ${POST_EXTERNAL}MB (+${EXTERNAL_DIFF}MB)"
     echo ""
     
     # Check additional object types if available
@@ -363,6 +408,7 @@ echo "- Environment: Local Bun execution"
 echo "- Load test: 1000 requests completed"
 echo "- Duration: ${DURATION} seconds"
 if $JQ_AVAILABLE; then
+    echo "- Memory growth: RSS +${RSS_DIFF}MB, HeapUsed +${HEAP_USED_DIFF}MB"
     echo "- HTTP Objects leak: +$HEADERS_DIFF Headers, +$RESPONSES_DIFF NodeHTTPResponse, +$SOCKETS_DIFF Sockets"
     echo "- Leak rates: Headers ~$HEADERS_LEAK_RATE, Responses ~$RESPONSES_LEAK_RATE per request"
     if [ -n "$PROMISES_DIFF" ]; then

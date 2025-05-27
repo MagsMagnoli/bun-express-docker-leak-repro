@@ -1,5 +1,6 @@
 import express from "express";
 import http from "node:http";
+import { WebSocketServer, WebSocket } from "ws";
 
 // Types for Bun's JavaScriptCore heap statistics
 interface HeapStats {
@@ -208,28 +209,115 @@ app.get("/memory", async (req, res) => {
   }
 });
 
-// Start the server
+// Create WebSocket server with noServer option (shares HTTP server)
+const wss = new WebSocketServer({ noServer: true });
+
+// Track connected clients for monitoring
+let connectedClients = 0;
+const clientConnections = new Set<WebSocket>();
+
+// Handle WebSocket upgrade requests
+server.on('upgrade', (request, socket, head) => {
+  const pathname = new URL(request.url!, `http://${request.headers.host}`).pathname;
+  
+  if (pathname === '/ws') {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
+  } else {
+    socket.destroy();
+  }
+});
+
+wss.on('connection', (ws: WebSocket) => {
+  connectedClients++;
+  clientConnections.add(ws);
+  
+  console.log(`WebSocket client connected. Total clients: ${connectedClients}`);
+
+  // Simple noop message handler - just echo back
+  ws.on('message', (data: Buffer) => {
+    try {
+      const message = data.toString();
+      // Echo the message back (noop operation)
+      ws.send(`Echo: ${message}`);
+    } catch (error) {
+      console.error('WebSocket message error:', error);
+    }
+  });
+
+  // Handle client disconnect
+  ws.on('close', () => {
+    connectedClients--;
+    clientConnections.delete(ws);
+    console.log(`WebSocket client disconnected. Total clients: ${connectedClients}`);
+  });
+
+  // Handle errors
+  ws.on('error', (error) => {
+    console.error('WebSocket error:', error);
+    clientConnections.delete(ws);
+    connectedClients--;
+  });
+
+  // Send a welcome message
+  ws.send(JSON.stringify({
+    type: 'welcome',
+    message: 'Connected to WebSocket server',
+    timestamp: new Date().toISOString()
+  }));
+});
+
+// Add WebSocket info to memory endpoint
+app.get("/websocket-info", (req, res) => {
+  res.status(200).json({
+    connectedClients,
+    totalConnections: clientConnections.size,
+    serverPort: PORT,
+    websocketPath: '/ws',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Start the HTTP server
 server.listen(PORT, () => {
   console.log(`🚀 Bun + Express memory leak reproduction server running on port ${PORT}`);
+  console.log(`🔌 WebSocket server running on same port (${PORT}) at /ws`);
   console.log(`📊 Memory monitoring: http://localhost:${PORT}/memory`);
+  console.log(`🔗 WebSocket info: http://localhost:${PORT}/websocket-info`);
   console.log(`❤️  Health check: http://localhost:${PORT}/health`);
   console.log(`🔬 To reproduce leak: bun run load-test`);
   console.log(`📈 To check memory: bun run memory-check`);
+  console.log(`💬 WebSocket test: ws://localhost:${PORT}/ws`);
 });
 
 // Graceful shutdown
-process.on("SIGTERM", () => {
-  console.log("Received SIGTERM, shutting down gracefully");
+const gracefulShutdown = () => {
+  console.log("Shutting down gracefully...");
+  
+  // Close WebSocket server
+  wss.close(() => {
+    console.log("WebSocket server closed");
+  });
+  
+  // Close all WebSocket connections
+  clientConnections.forEach((ws) => {
+    ws.close();
+  });
+  
+  // Close HTTP server
   server.close(() => {
-    console.log("Server closed");
+    console.log("HTTP server closed");
     process.exit(0);
   });
+};
+
+process.on("SIGTERM", () => {
+  console.log("Received SIGTERM");
+  gracefulShutdown();
 });
 
 process.on("SIGINT", () => {
-  console.log("Received SIGINT, shutting down gracefully");
-  server.close(() => {
-    console.log("Server closed");
-    process.exit(0);
-  });
+  console.log("Received SIGINT");
+  gracefulShutdown();
 }); 
