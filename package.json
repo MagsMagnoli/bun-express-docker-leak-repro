@@ -1,0 +1,26 @@
+{
+  "name": "bun-express-memory-leak-repro",
+  "version": "1.0.0",
+  "description": "Minimal reproduction case for Bun + Express memory leak",
+  "main": "index.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run index.ts",
+    "start": "bun run index.ts",
+    "build": "bun build index.ts --outdir ./dist --target bun",
+    "docker:build": "docker build -t bun-memory-leak-repro .",
+    "docker:run": "docker run -p 3000:3000 bun-memory-leak-repro",
+    "load-test": "for i in {1..1000}; do curl -s http://localhost:3000/health > /dev/null; done",
+    "memory-check": "curl -s http://localhost:3000/memory | jq"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "bun-types": "latest"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+} 
