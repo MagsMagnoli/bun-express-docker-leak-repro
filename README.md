@@ -45,37 +45,30 @@ When running a minimal Express.js server on Bun, HTTP-related objects accumulate
 
 ### **Complete 7-Way Analysis**
 ```bash
-./run-comprehensive-tests.sh
+./run-all-tests.sh
 ```
 **Estimated time**: ~25-35 minutes total  
 **What it does**: Runs all seven test environments and provides comprehensive containerization analysis.
 
-### **Original 4-Way Analysis**
-```bash
-./run-all-tests.sh
-```
-**Estimated time**: ~12-20 minutes total  
-**What it does**: Runs the core four test environments (Local, Docker, Node.js, Bun-in-Node).
-
 ### **Individual Test Options**
 ```bash
 # Core tests
-./run-comprehensive-tests.sh --local-only       # Local Bun (~3-5 min)
-./run-comprehensive-tests.sh --docker-only      # Docker Bun (~3-5 min)  
-./run-comprehensive-tests.sh --node-only        # Node.js control (~3-5 min)
-./run-comprehensive-tests.sh --node-bun-only    # Bun-in-Node isolation (~3-5 min)
+./run-all-tests.sh --local-only       # Local Bun (~3-5 min)
+./run-all-tests.sh --docker-only      # Docker Bun (~3-5 min)  
+./run-all-tests.sh --node-only        # Node.js control (~3-5 min)
+./run-all-tests.sh --node-bun-only    # Bun-in-Node isolation (~3-5 min)
 
 # Container distribution tests
-./run-comprehensive-tests.sh --ubuntu-bun-only  # Ubuntu + Bun (~3-5 min)
-./run-comprehensive-tests.sh --debian-bun-only  # Debian + Bun (~3-5 min)
-./run-comprehensive-tests.sh --alpine-bun-only  # Alpine + Bun (~3-5 min)
+./run-all-tests.sh --ubuntu-bun-only  # Ubuntu + Bun (~3-5 min)
+./run-all-tests.sh --debian-bun-only  # Debian + Bun (~3-5 min)
+./run-all-tests.sh --alpine-bun-only  # Alpine + Bun (~3-5 min)
 ```
 
 ### **Direct Test Execution**
 ```bash
 # Core test scripts
-./test-reproduction-local.sh      # Local Bun
-./test-reproduction.sh            # Docker Bun  
+./test-local.sh                   # Local Bun
+./test-docker-bun.sh              # Docker Bun  
 ./test-docker-node.sh             # Node.js 24.0.2
 ./test-docker-node-bun.sh         # Bun-in-Node.js isolation
 
@@ -292,10 +285,9 @@ The leak appears to be at the fundamental HTTP request/response handling level i
 - `Dockerfile.alpine-bun` - **NEW!** Alpine 3.19 + Bun installation
 
 ### Test Scripts
-- `run-comprehensive-tests.sh` - **NEW!** Complete 7-way test matrix
-- `run-all-tests.sh` - Original 4-way test runner (Local, Docker, Node.js, Bun-in-Node)
-- `test-reproduction-local.sh` - Local Bun test
-- `test-reproduction.sh` - Docker Bun test  
+- `run-all-tests.sh` - Complete 7-way test matrix (Local, Docker, Node.js, Bun-in-Node, Ubuntu+Bun, Debian+Bun, Alpine+Bun)
+- `test-local.sh` - Local Bun test
+- `test-docker-bun.sh` - Docker Bun test  
 - `test-docker-node.sh` - Node.js 24.0.2 test
 - `test-docker-node-bun.sh` - Bun-in-Node.js isolation test
 - `test-docker-ubuntu-bun.sh` - **NEW!** Ubuntu + Bun container test
@@ -310,25 +302,18 @@ The leak appears to be at the fundamental HTTP request/response handling level i
 ### **Automated Testing Scripts**
 ```bash
 # Comprehensive 7-way test matrix
-./run-comprehensive-tests.sh                    # All 7 tests (~25-35 min)
-./run-comprehensive-tests.sh --local-only       # Local Bun only
-./run-comprehensive-tests.sh --docker-only      # Docker Bun only  
-./run-comprehensive-tests.sh --node-only        # Node.js only
-./run-comprehensive-tests.sh --node-bun-only    # Bun-in-Node only
-./run-comprehensive-tests.sh --ubuntu-bun-only  # Ubuntu + Bun only
-./run-comprehensive-tests.sh --debian-bun-only  # Debian + Bun only
-./run-comprehensive-tests.sh --alpine-bun-only  # Alpine + Bun only
-
-# Original 4-way test runner
-./run-all-tests.sh                  # Core 4 tests (~12-20 min)
-./run-all-tests.sh --local-only     # Local Bun only
-./run-all-tests.sh --docker-only    # Docker Bun only  
-./run-all-tests.sh --node-only      # Node.js only
-./run-all-tests.sh --node-bun-only  # Bun-in-Node only
+./run-all-tests.sh                    # All 7 tests (~25-35 min)
+./run-all-tests.sh --local-only       # Local Bun only
+./run-all-tests.sh --docker-only      # Docker Bun only  
+./run-all-tests.sh --node-only        # Node.js only
+./run-all-tests.sh --node-bun-only    # Bun-in-Node only
+./run-all-tests.sh --ubuntu-bun-only  # Ubuntu + Bun only
+./run-all-tests.sh --debian-bun-only  # Debian + Bun only
+./run-all-tests.sh --alpine-bun-only  # Alpine + Bun only
 
 # Individual test execution
-./test-reproduction-local.sh        # Local Bun
-./test-reproduction.sh              # Docker Bun
+./test-local.sh                     # Local Bun
+./test-docker-bun.sh                # Docker Bun
 ./test-docker-node.sh               # Node.js 24.0.2
 ./test-docker-node-bun.sh           # Bun-in-Node.js
 ./test-docker-ubuntu-bun.sh         # Ubuntu + Bun

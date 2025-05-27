@@ -1,13 +1,12 @@
 #!/bin/bash
 
-# Master Test Runner - Runs both Local and Docker memory leak tests
-# This script runs both test variants and provides a comparison summary
+# Comprehensive Container Test Runner for Bun Memory Leak Reproduction
+# Tests Bun across 7 different environments to isolate containerization effects
 
 set -e
 
-echo "🧪 Bun + Express Memory Leak Test Suite"
-echo "========================================"
-echo ""
+echo "🧪 Bun Memory Leak - Comprehensive Container Test Matrix"
+echo "========================================================"
 
 # Colors for output
 RED='\033[0;31m'
@@ -15,7 +14,82 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
 NC='\033[0m' # No Color
+
+# Parse command line arguments
+LOCAL_ONLY=false
+DOCKER_ONLY=false
+NODE_ONLY=false
+NODE_BUN_ONLY=false
+UBUNTU_BUN_ONLY=false
+DEBIAN_BUN_ONLY=false
+ALPINE_BUN_ONLY=false
+
+for arg in "$@"; do
+    case $arg in
+        --local-only)
+            LOCAL_ONLY=true
+            shift
+            ;;
+        --docker-only)
+            DOCKER_ONLY=true
+            shift
+            ;;
+        --node-only)
+            NODE_ONLY=true
+            shift
+            ;;
+        --node-bun-only)
+            NODE_BUN_ONLY=true
+            shift
+            ;;
+        --ubuntu-bun-only)
+            UBUNTU_BUN_ONLY=true
+            shift
+            ;;
+        --debian-bun-only)
+            DEBIAN_BUN_ONLY=true
+            shift
+            ;;
+        --alpine-bun-only)
+            ALPINE_BUN_ONLY=true
+            shift
+            ;;
+        --help)
+            echo "Usage: $0 [options]"
+            echo ""
+            echo "🔬 Comprehensive Container Test Matrix:"
+            echo ""
+            echo "Options:"
+            echo "  --local-only      Run only local Bun test (no container)"
+            echo "  --docker-only     Run only Docker Bun test (official Bun image)"
+            echo "  --node-only       Run only Node.js Docker test (control group)"
+            echo "  --node-bun-only   Run only Bun-in-Node Docker test (isolation)"
+            echo "  --ubuntu-bun-only Run only Ubuntu + Bun Docker test"
+            echo "  --debian-bun-only Run only Debian + Bun Docker test"
+            echo "  --alpine-bun-only Run only Alpine + Bun Docker test"
+            echo "  --help            Show this help message"
+            echo ""
+            echo "🎯 Test Matrix Analysis:"
+            echo "  Local Bun:     No container - baseline behavior"
+            echo "  Docker Bun:    Official Bun container"
+            echo "  Node.js:       Control group - should be clean"
+            echo "  Bun-in-Node:   Isolation test - Bun runtime in Node container"
+            echo "  Ubuntu + Bun:  Test Ubuntu-specific containerization effects"
+            echo "  Debian + Bun:  Test Debian-specific containerization effects"
+            echo "  Alpine + Bun:  Test minimal Linux containerization effects"
+            echo ""
+            echo "By default, all tests are run in sequence (~25-35 minutes total)."
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $arg"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
 
 # Check dependencies
 echo -e "${BLUE}🔍 Checking dependencies...${NC}"
@@ -73,73 +147,134 @@ extract_metrics() {
     echo ""
 }
 
-# Test selection
-if [ "$1" = "--local-only" ]; then
+# Determine which tests to run
+if [ "$LOCAL_ONLY" = true ]; then
     RUN_LOCAL=true
     RUN_DOCKER=false
     RUN_NODE=false
     RUN_NODE_BUN=false
+    RUN_UBUNTU_BUN=false
+    RUN_DEBIAN_BUN=false
+    RUN_ALPINE_BUN=false
     echo -e "${CYAN}🎯 Running LOCAL test only${NC}"
     echo -e "${YELLOW}⏱️  Estimated time: ~3-5 minutes${NC}"
-elif [ "$1" = "--docker-only" ]; then
+elif [ "$DOCKER_ONLY" = true ]; then
     RUN_LOCAL=false
     RUN_DOCKER=true
     RUN_NODE=false
     RUN_NODE_BUN=false
-    echo -e "${CYAN}🎯 Running DOCKER test only${NC}"
+    RUN_UBUNTU_BUN=false
+    RUN_DEBIAN_BUN=false
+    RUN_ALPINE_BUN=false
+    echo -e "${CYAN}🎯 Running DOCKER BUN test only${NC}"
     echo -e "${YELLOW}⏱️  Estimated time: ~3-5 minutes${NC}"
-elif [ "$1" = "--node-only" ]; then
+elif [ "$NODE_ONLY" = true ]; then
     RUN_LOCAL=false
     RUN_DOCKER=false
     RUN_NODE=true
     RUN_NODE_BUN=false
+    RUN_UBUNTU_BUN=false
+    RUN_DEBIAN_BUN=false
+    RUN_ALPINE_BUN=false
     echo -e "${CYAN}🎯 Running NODE.JS test only${NC}"
     echo -e "${YELLOW}⏱️  Estimated time: ~3-5 minutes${NC}"
-elif [ "$1" = "--node-bun-only" ]; then
+elif [ "$NODE_BUN_ONLY" = true ]; then
     RUN_LOCAL=false
     RUN_DOCKER=false
     RUN_NODE=false
     RUN_NODE_BUN=true
+    RUN_UBUNTU_BUN=false
+    RUN_DEBIAN_BUN=false
+    RUN_ALPINE_BUN=false
     echo -e "${CYAN}🎯 Running BUN-IN-NODE.JS test only${NC}"
+    echo -e "${YELLOW}⏱️  Estimated time: ~3-5 minutes${NC}"
+elif [ "$UBUNTU_BUN_ONLY" = true ]; then
+    RUN_LOCAL=false
+    RUN_DOCKER=false
+    RUN_NODE=false
+    RUN_NODE_BUN=false
+    RUN_UBUNTU_BUN=true
+    RUN_DEBIAN_BUN=false
+    RUN_ALPINE_BUN=false
+    echo -e "${CYAN}🎯 Running UBUNTU + BUN test only${NC}"
+    echo -e "${YELLOW}⏱️  Estimated time: ~3-5 minutes${NC}"
+elif [ "$DEBIAN_BUN_ONLY" = true ]; then
+    RUN_LOCAL=false
+    RUN_DOCKER=false
+    RUN_NODE=false
+    RUN_NODE_BUN=false
+    RUN_UBUNTU_BUN=false
+    RUN_DEBIAN_BUN=true
+    RUN_ALPINE_BUN=false
+    echo -e "${CYAN}🎯 Running DEBIAN + BUN test only${NC}"
+    echo -e "${YELLOW}⏱️  Estimated time: ~3-5 minutes${NC}"
+elif [ "$ALPINE_BUN_ONLY" = true ]; then
+    RUN_LOCAL=false
+    RUN_DOCKER=false
+    RUN_NODE=false
+    RUN_NODE_BUN=false
+    RUN_UBUNTU_BUN=false
+    RUN_DEBIAN_BUN=false
+    RUN_ALPINE_BUN=true
+    echo -e "${CYAN}🎯 Running ALPINE + BUN test only${NC}"
     echo -e "${YELLOW}⏱️  Estimated time: ~3-5 minutes${NC}"
 else
     RUN_LOCAL=true
     RUN_DOCKER=true
     RUN_NODE=true
     RUN_NODE_BUN=true
-    echo -e "${CYAN}🎯 Running ALL tests (Local Bun + Docker Bun + Node.js + Bun-in-Node)${NC}"
-    echo -e "${YELLOW}⏱️  Estimated time: ~12-20 minutes total${NC}"
+    RUN_UBUNTU_BUN=true
+    RUN_DEBIAN_BUN=true
+    RUN_ALPINE_BUN=true
+    echo -e "${CYAN}🎯 Running ALL 7 tests (Comprehensive Container Matrix)${NC}"
+    echo -e "${YELLOW}⏱️  Estimated time: ~25-35 minutes total${NC}"
 fi
 
 echo ""
-echo -e "${BLUE}📋 What will happen:${NC}"
+echo -e "${BLUE}📋 Test Matrix Overview:${NC}"
 if [ "$RUN_LOCAL" = true ]; then
-    echo "  1. 🏠 Local Bun test (install deps → start server → 1000 requests → 2min wait → analysis)"
+    echo "  1. 🏠 Local Bun (no container) - baseline behavior"
 fi
 if [ "$RUN_DOCKER" = true ]; then
-    echo "  2. 🐳 Docker Bun test (build image → start container → 1000 requests → 2min wait → analysis)"
+    echo "  2. 🐳 Docker Bun (official Bun image) - standard containerization"
 fi
 if [ "$RUN_NODE" = true ]; then
-    echo "  3. 🟢 Node.js Docker test (build image → start container → 1000 requests → 2min wait → analysis)"
+    echo "  3. 🟢 Node.js Docker (control group) - should be clean"
 fi
 if [ "$RUN_NODE_BUN" = true ]; then
-    echo "  4. 🔬 Bun-in-Node.js test (build hybrid image → start container → 1000 requests → 2min wait → analysis)"
+    echo "  4. 🔬 Bun-in-Node Docker (isolation test) - runtime vs container"
 fi
-echo "  5. 📊 Comparison summary and metrics extraction"
+if [ "$RUN_UBUNTU_BUN" = true ]; then
+    echo "  5. 🟠 Ubuntu + Bun Docker - Ubuntu-specific effects"
+fi
+if [ "$RUN_DEBIAN_BUN" = true ]; then
+    echo "  6. 🔵 Debian + Bun Docker - Debian-specific effects"
+fi
+if [ "$RUN_ALPINE_BUN" = true ]; then
+    echo "  7. ⛰️  Alpine + Bun Docker - minimal Linux effects"
+fi
 echo ""
+
+# Initialize exit codes
+LOCAL_EXIT_CODE=0
+DOCKER_EXIT_CODE=0
+NODE_EXIT_CODE=0
+NODE_BUN_EXIT_CODE=0
+UBUNTU_BUN_EXIT_CODE=0
+DEBIAN_BUN_EXIT_CODE=0
+ALPINE_BUN_EXIT_CODE=0
 
 # Run Local Test
 if [ "$RUN_LOCAL" = true ]; then
     echo -e "${BLUE}🏠 Starting LOCAL Bun test...${NC}"
     echo "================================================"
     
-    if [ -f "test-reproduction-local.sh" ]; then
-        chmod +x test-reproduction-local.sh
+    if [ -f "test-local.sh" ]; then
+        chmod +x test-local.sh
         echo -e "${YELLOW}⏳ Running local test (this will take ~3-5 minutes)...${NC}"
         echo ""
         
-        # Run test with live output and capture for metrics
-        ./test-reproduction-local.sh 2>&1 | tee /tmp/local_test_output.log
+        ./test-local.sh 2>&1 | tee /tmp/local_test_output.log
         LOCAL_EXIT_CODE=${PIPESTATUS[0]}
         LOCAL_OUTPUT=$(cat /tmp/local_test_output.log)
         
@@ -154,10 +289,9 @@ if [ "$RUN_LOCAL" = true ]; then
         echo -e "${BLUE}📊 Local Test Metrics:${NC}"
         extract_metrics "$LOCAL_OUTPUT" "Local Bun"
         
-        # Cleanup temp file
         rm -f /tmp/local_test_output.log
     else
-        echo -e "${RED}❌ test-reproduction-local.sh not found${NC}"
+        echo -e "${RED}❌ test-local.sh not found${NC}"
         LOCAL_EXIT_CODE=1
     fi
     
@@ -167,34 +301,32 @@ fi
 
 # Run Docker Test
 if [ "$RUN_DOCKER" = true ]; then
-    echo -e "${BLUE}🐳 Starting DOCKER test...${NC}"
+    echo -e "${BLUE}🐳 Starting DOCKER BUN test...${NC}"
     echo "================================================"
     
-    if [ -f "test-reproduction.sh" ]; then
-        chmod +x test-reproduction.sh
-        echo -e "${YELLOW}⏳ Running Docker test (this will take ~3-5 minutes)...${NC}"
+    if [ -f "test-docker-bun.sh" ]; then
+        chmod +x test-docker-bun.sh
+        echo -e "${YELLOW}⏳ Running Docker Bun test (this will take ~3-5 minutes)...${NC}"
         echo ""
         
-        # Run test with live output and capture for metrics
-        ./test-reproduction.sh 2>&1 | tee /tmp/docker_test_output.log
+        ./test-docker-bun.sh 2>&1 | tee /tmp/docker_test_output.log
         DOCKER_EXIT_CODE=${PIPESTATUS[0]}
         DOCKER_OUTPUT=$(cat /tmp/docker_test_output.log)
         
         echo ""
         if [ $DOCKER_EXIT_CODE -eq 0 ]; then
-            echo -e "${GREEN}✅ Docker test completed successfully${NC}"
+            echo -e "${GREEN}✅ Docker Bun test completed successfully${NC}"
         else
-            echo -e "${RED}❌ Docker test failed with exit code $DOCKER_EXIT_CODE${NC}"
+            echo -e "${RED}❌ Docker Bun test failed with exit code $DOCKER_EXIT_CODE${NC}"
         fi
         
         echo ""
-        echo -e "${BLUE}📊 Docker Test Metrics:${NC}"
-        extract_metrics "$DOCKER_OUTPUT" "Docker Container"
+        echo -e "${BLUE}📊 Docker Bun Test Metrics:${NC}"
+        extract_metrics "$DOCKER_OUTPUT" "Docker Bun"
         
-        # Cleanup temp file
         rm -f /tmp/docker_test_output.log
     else
-        echo -e "${RED}❌ test-reproduction.sh not found${NC}"
+        echo -e "${RED}❌ test-docker-bun.sh not found${NC}"
         DOCKER_EXIT_CODE=1
     fi
     
@@ -212,7 +344,6 @@ if [ "$RUN_NODE" = true ]; then
         echo -e "${YELLOW}⏳ Running Node.js Docker test (this will take ~3-5 minutes)...${NC}"
         echo ""
         
-        # Run test with live output and capture for metrics
         ./test-docker-node.sh 2>&1 | tee /tmp/node_test_output.log
         NODE_EXIT_CODE=${PIPESTATUS[0]}
         NODE_OUTPUT=$(cat /tmp/node_test_output.log)
@@ -228,7 +359,6 @@ if [ "$RUN_NODE" = true ]; then
         echo -e "${BLUE}📊 Node.js Docker Test Metrics:${NC}"
         extract_metrics "$NODE_OUTPUT" "Node.js 24.0.2 Docker"
         
-        # Cleanup temp file
         rm -f /tmp/node_test_output.log
     else
         echo -e "${RED}❌ test-docker-node.sh not found${NC}"
@@ -249,7 +379,6 @@ if [ "$RUN_NODE_BUN" = true ]; then
         echo -e "${YELLOW}⏳ Running Bun-in-Node.js Docker test (this will take ~3-5 minutes)...${NC}"
         echo ""
         
-        # Run test with live output and capture for metrics
         ./test-docker-node-bun.sh 2>&1 | tee /tmp/node_bun_test_output.log
         NODE_BUN_EXIT_CODE=${PIPESTATUS[0]}
         NODE_BUN_OUTPUT=$(cat /tmp/node_bun_test_output.log)
@@ -265,7 +394,6 @@ if [ "$RUN_NODE_BUN" = true ]; then
         echo -e "${BLUE}📊 Bun-in-Node.js Docker Test Metrics:${NC}"
         extract_metrics "$NODE_BUN_OUTPUT" "Bun-in-Node.js Docker"
         
-        # Cleanup temp file
         rm -f /tmp/node_bun_test_output.log
     else
         echo -e "${RED}❌ test-docker-node-bun.sh not found${NC}"
@@ -276,9 +404,114 @@ if [ "$RUN_NODE_BUN" = true ]; then
     echo ""
 fi
 
+# Run Ubuntu + Bun Docker Test
+if [ "$RUN_UBUNTU_BUN" = true ]; then
+    echo -e "${BLUE}🟠 Starting UBUNTU + BUN Docker test...${NC}"
+    echo "================================================"
+    
+    if [ -f "test-docker-ubuntu-bun.sh" ]; then
+        chmod +x test-docker-ubuntu-bun.sh
+        echo -e "${YELLOW}⏳ Running Ubuntu + Bun Docker test (this will take ~3-5 minutes)...${NC}"
+        echo ""
+        
+        ./test-docker-ubuntu-bun.sh 2>&1 | tee /tmp/ubuntu_bun_test_output.log
+        UBUNTU_BUN_EXIT_CODE=${PIPESTATUS[0]}
+        UBUNTU_BUN_OUTPUT=$(cat /tmp/ubuntu_bun_test_output.log)
+        
+        echo ""
+        if [ $UBUNTU_BUN_EXIT_CODE -eq 0 ]; then
+            echo -e "${GREEN}✅ Ubuntu + Bun Docker test completed successfully${NC}"
+        else
+            echo -e "${RED}❌ Ubuntu + Bun Docker test failed with exit code $UBUNTU_BUN_EXIT_CODE${NC}"
+        fi
+        
+        echo ""
+        echo -e "${BLUE}📊 Ubuntu + Bun Docker Test Metrics:${NC}"
+        extract_metrics "$UBUNTU_BUN_OUTPUT" "Ubuntu + Bun Docker"
+        
+        rm -f /tmp/ubuntu_bun_test_output.log
+    else
+        echo -e "${RED}❌ test-docker-ubuntu-bun.sh not found${NC}"
+        UBUNTU_BUN_EXIT_CODE=1
+    fi
+    
+    echo "================================================"
+    echo ""
+fi
+
+# Run Debian + Bun Docker Test
+if [ "$RUN_DEBIAN_BUN" = true ]; then
+    echo -e "${BLUE}🔵 Starting DEBIAN + BUN Docker test...${NC}"
+    echo "================================================"
+    
+    if [ -f "test-docker-debian-bun.sh" ]; then
+        chmod +x test-docker-debian-bun.sh
+        echo -e "${YELLOW}⏳ Running Debian + Bun Docker test (this will take ~3-5 minutes)...${NC}"
+        echo ""
+        
+        ./test-docker-debian-bun.sh 2>&1 | tee /tmp/debian_bun_test_output.log
+        DEBIAN_BUN_EXIT_CODE=${PIPESTATUS[0]}
+        DEBIAN_BUN_OUTPUT=$(cat /tmp/debian_bun_test_output.log)
+        
+        echo ""
+        if [ $DEBIAN_BUN_EXIT_CODE -eq 0 ]; then
+            echo -e "${GREEN}✅ Debian + Bun Docker test completed successfully${NC}"
+        else
+            echo -e "${RED}❌ Debian + Bun Docker test failed with exit code $DEBIAN_BUN_EXIT_CODE${NC}"
+        fi
+        
+        echo ""
+        echo -e "${BLUE}📊 Debian + Bun Docker Test Metrics:${NC}"
+        extract_metrics "$DEBIAN_BUN_OUTPUT" "Debian + Bun Docker"
+        
+        rm -f /tmp/debian_bun_test_output.log
+    else
+        echo -e "${RED}❌ test-docker-debian-bun.sh not found${NC}"
+        DEBIAN_BUN_EXIT_CODE=1
+    fi
+    
+    echo "================================================"
+    echo ""
+fi
+
+# Run Alpine + Bun Docker Test
+if [ "$RUN_ALPINE_BUN" = true ]; then
+    echo -e "${BLUE}⛰️  Starting ALPINE + BUN Docker test...${NC}"
+    echo "================================================"
+    
+    if [ -f "test-docker-alpine-bun.sh" ]; then
+        chmod +x test-docker-alpine-bun.sh
+        echo -e "${YELLOW}⏳ Running Alpine + Bun Docker test (this will take ~3-5 minutes)...${NC}"
+        echo ""
+        
+        ./test-docker-alpine-bun.sh 2>&1 | tee /tmp/alpine_bun_test_output.log
+        ALPINE_BUN_EXIT_CODE=${PIPESTATUS[0]}
+        ALPINE_BUN_OUTPUT=$(cat /tmp/alpine_bun_test_output.log)
+        
+        echo ""
+        if [ $ALPINE_BUN_EXIT_CODE -eq 0 ]; then
+            echo -e "${GREEN}✅ Alpine + Bun Docker test completed successfully${NC}"
+        else
+            echo -e "${RED}❌ Alpine + Bun Docker test failed with exit code $ALPINE_BUN_EXIT_CODE${NC}"
+        fi
+        
+        echo ""
+        echo -e "${BLUE}📊 Alpine + Bun Docker Test Metrics:${NC}"
+        extract_metrics "$ALPINE_BUN_OUTPUT" "Alpine + Bun Docker"
+        
+        rm -f /tmp/alpine_bun_test_output.log
+    else
+        echo -e "${RED}❌ test-docker-alpine-bun.sh not found${NC}"
+        ALPINE_BUN_EXIT_CODE=1
+    fi
+    
+    echo "================================================"
+    echo ""
+fi
+
 # Summary
-echo -e "${CYAN}📋 TEST SUITE SUMMARY${NC}"
-echo "===================="
+echo -e "${CYAN}📋 COMPREHENSIVE TEST MATRIX SUMMARY${NC}"
+echo "===================================="
 
 # Count successful tests
 SUCCESSFUL_TESTS=0
@@ -312,69 +545,65 @@ if [ "$RUN_NODE_BUN" = true ]; then
     fi
 fi
 
+if [ "$RUN_UBUNTU_BUN" = true ]; then
+    TOTAL_TESTS=$((TOTAL_TESTS + 1))
+    if [ $UBUNTU_BUN_EXIT_CODE -eq 0 ]; then
+        SUCCESSFUL_TESTS=$((SUCCESSFUL_TESTS + 1))
+    fi
+fi
+
+if [ "$RUN_DEBIAN_BUN" = true ]; then
+    TOTAL_TESTS=$((TOTAL_TESTS + 1))
+    if [ $DEBIAN_BUN_EXIT_CODE -eq 0 ]; then
+        SUCCESSFUL_TESTS=$((SUCCESSFUL_TESTS + 1))
+    fi
+fi
+
+if [ "$RUN_ALPINE_BUN" = true ]; then
+    TOTAL_TESTS=$((TOTAL_TESTS + 1))
+    if [ $ALPINE_BUN_EXIT_CODE -eq 0 ]; then
+        SUCCESSFUL_TESTS=$((SUCCESSFUL_TESTS + 1))
+    fi
+fi
+
 echo -e "${BLUE}📊 Test Results: $SUCCESSFUL_TESTS/$TOTAL_TESTS tests passed${NC}"
 echo ""
 
 if [ $SUCCESSFUL_TESTS -eq $TOTAL_TESTS ] && [ $TOTAL_TESTS -gt 0 ]; then
     echo -e "${GREEN}✅ All tests completed successfully${NC}"
     echo ""
-    echo -e "${BLUE}🔍 Comparison Analysis:${NC}"
-    if [ "$RUN_LOCAL" = true ] && [ "$RUN_DOCKER" = true ] && [ "$RUN_NODE" = true ] && [ "$RUN_NODE_BUN" = true ]; then
-        echo "- Compare memory leak patterns across all FOUR environments:"
-        echo "  • Local Bun: Direct execution, no containerization"
-        echo "  • Docker Bun: Containerized Bun environment (official Bun image)"
-        echo "  • Node.js 24.0.2: Native TypeScript support with --experimental-strip-types"
-        echo "  • Bun-in-Node: Bun runtime inside Node.js container (isolation test)"
-        echo "- Critical analysis: If Bun-in-Node shows leaks, it's a Bun runtime issue"
-        echo "- If Bun-in-Node is clean, the issue may be Bun's Docker environment"
-        echo "- Node.js should show proper garbage collection (control group)"
-    elif [ "$RUN_LOCAL" = true ] && [ "$RUN_DOCKER" = true ] && [ "$RUN_NODE_BUN" = true ]; then
-        echo "- Compare Bun runtime across different environments:"
-        echo "  • Local Bun vs Docker Bun vs Bun-in-Node"
-        echo "- Isolate whether leaks are runtime or environment specific"
-    elif [ "$RUN_NODE" = true ] && [ "$RUN_NODE_BUN" = true ]; then
-        echo "- Compare Node.js vs Bun runtime in same container environment"
-        echo "- Perfect isolation test for runtime-specific issues"
-    elif [ "$RUN_NODE_BUN" = true ]; then
-        echo "- Bun-in-Node.js isolation test completed"
-        echo "- This isolates Bun runtime behavior from containerization effects"
-    elif [ "$RUN_LOCAL" = true ] && [ "$RUN_DOCKER" = true ]; then
-        echo "- Both Bun environments can be tested for memory leak patterns"
-        echo "- Compare the leak rates and severity between local and Docker"
-        echo "- Look for consistency in memory leak behavior"
-    elif [ "$RUN_NODE" = true ]; then
-        echo "- Node.js 24.0.2 with experimental TypeScript support tested"
-        echo "- Should demonstrate proper memory management (no leaks)"
-        echo "- Use as baseline for comparison with Bun results"
-    fi
-elif [ $SUCCESSFUL_TESTS -gt 0 ]; then
-    echo -e "${YELLOW}⚠️  Partial success: $SUCCESSFUL_TESTS/$TOTAL_TESTS tests passed${NC}"
+    echo -e "${MAGENTA}🔬 CONTAINERIZATION ANALYSIS:${NC}"
     echo ""
-    if [ "$RUN_LOCAL" = true ] && [ $LOCAL_EXIT_CODE -ne 0 ]; then
-        echo "- Local Bun test failed - check Bun installation"
-    fi
-    if [ "$RUN_DOCKER" = true ] && [ $DOCKER_EXIT_CODE -ne 0 ]; then
-        echo "- Docker Bun test failed - check Docker configuration"
-    fi
-    if [ "$RUN_NODE" = true ] && [ $NODE_EXIT_CODE -ne 0 ]; then
-        echo "- Node.js Docker test failed - check Node.js setup"
-    fi
-    if [ "$RUN_NODE_BUN" = true ] && [ $NODE_BUN_EXIT_CODE -ne 0 ]; then
-        echo "- Bun-in-Node.js Docker test failed - check hybrid setup"
-    fi
+    echo "This comprehensive test matrix helps isolate:"
+    echo ""
+    echo "🎯 RUNTIME vs CONTAINERIZATION:"
+    echo "  • Local Bun (clean) vs Any Container + Bun (leaks) = Container triggers leak"
+    echo "  • Node.js (clean) vs Bun-in-Node (leaks) = Bun runtime issue"
+    echo ""
+    echo "🐧 LINUX DISTRIBUTION EFFECTS:"
+    echo "  • Compare Ubuntu vs Debian vs Alpine + Bun containers"
+    echo "  • If all show leaks = general containerization issue"
+    echo "  • If specific distros leak = distribution-specific trigger"
+    echo ""
+    echo "🔍 CRITICAL FINDINGS:"
+    echo "  • If Bun-in-Node leaks = DEFINITIVE Bun runtime bug"
+    echo "  • If all containers leak but local is clean = containerization triggers bug"
+    echo "  • Pattern consistency across distros = confirms systematic issue"
+    echo ""
+    echo "📈 LEAK PATTERN ANALYSIS:"
+    echo "  • Headers/NodeHTTPResponse objects accumulating ~1.3 per request"
+    echo "  • Memory growth in RSS/HeapUsed metrics"
+    echo "  • Continued growth during 2-minute wait periods"
+    echo ""
 else
-    echo -e "${RED}❌ All tests failed${NC}"
-    echo "- Check dependencies: Bun, Docker, Node.js"
-    echo "- Verify Docker is running and accessible"
-    echo "- Check file permissions on test scripts"
+    echo -e "${YELLOW}⚠️  Partial success: $SUCCESSFUL_TESTS/$TOTAL_TESTS tests passed${NC}"
 fi
 
 echo ""
-echo -e "${BLUE}📖 Usage:${NC}"
-echo "  ./run-all-tests.sh                  # Run all tests (Local Bun + Docker Bun + Node.js + Bun-in-Node)"
-echo "  ./run-all-tests.sh --local-only     # Run only local Bun test"
-echo "  ./run-all-tests.sh --docker-only    # Run only Docker Bun test"
-echo "  ./run-all-tests.sh --node-only      # Run only Node.js Docker test"
-echo "  ./run-all-tests.sh --node-bun-only  # Run only Bun-in-Node.js isolation test"
+echo -e "${BLUE}📖 Usage Examples:${NC}"
+echo "  ./run-comprehensive-tests.sh                    # Run all 7 tests (full matrix)"
+echo "  ./run-comprehensive-tests.sh --local-only       # Test only local Bun"
+echo "  ./run-comprehensive-tests.sh --ubuntu-bun-only  # Test only Ubuntu + Bun"
+echo "  ./run-comprehensive-tests.sh --alpine-bun-only  # Test only Alpine + Bun"
 echo ""
-echo "Share results with the Bun development team for comprehensive analysis." 
+echo "🚀 This comprehensive analysis provides definitive evidence for Bun team!" 
