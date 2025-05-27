@@ -2,18 +2,25 @@
 
 This repository contains a comprehensive reproduction case for a memory leak that occurs when using Bun with Express.js. The leak manifests as continuously growing `Headers`, `NodeHTTPResponse`, and `Arguments` objects that are not properly garbage collected.
 
-## 🔬 **4-Way Isolation Test Matrix**
+## 🔬 **7-Way Comprehensive Container Test Matrix**
 
-We've created the ultimate isolation test to pinpoint whether this is a **Bun runtime issue** or **containerization issue**:
+We've created the ultimate isolation test matrix to pinpoint whether this is a **Bun runtime issue** or **containerization issue**:
 
 | Test Environment | Runtime | Container Base | Expected Result | Purpose |
 |------------------|---------|----------------|----------------|---------|
-| **Local Bun** | Bun | None (macOS) | ❓ Test reports | Direct execution baseline |
-| **Docker Bun** | Bun | Official Bun image | ❓ Test reports | Containerized Bun |
-| **Node.js** | Node.js 24.0.2 | Node.js slim | ✅ No leaks (control) | Proper behavior reference |
-| **Bun-in-Node** | **Bun** | Node.js slim | 🎯 **THE SMOKING GUN** | Runtime isolation test |
+| **🏠 Local Bun** | Bun | None (macOS) | ❓ Test reports | Direct execution baseline |
+| **🐳 Docker Bun** | Bun | Official Bun image | ❓ Test reports | Standard containerized Bun |
+| **🟢 Node.js** | Node.js 24.0.2 | Node.js slim | ✅ No leaks (control) | Proper behavior reference |
+| **🔬 Bun-in-Node** | **Bun** | Node.js slim | 🎯 **THE SMOKING GUN** | Runtime isolation test |
+| **🟠 Ubuntu + Bun** | Bun | Ubuntu 22.04 | ❓ Test reports | Ubuntu-specific effects |
+| **🔵 Debian + Bun** | Bun | Debian 12-slim | ❓ Test reports | Debian-specific effects |
+| **⛰️ Alpine + Bun** | Bun | Alpine 3.19 | ❓ Test reports | Minimal Linux effects |
 
-**The Key Insight**: If **Bun-in-Node** shows leaks, it's definitely a **Bun runtime issue**. If it doesn't, the problem might be in Bun's Docker environment.
+**The Key Insights**: 
+- If **Bun-in-Node** shows leaks → **DEFINITIVE Bun runtime issue**
+- If **all containers leak but local is clean** → Containerization triggers bug
+- If **specific distros leak differently** → Distribution-specific trigger
+- **Pattern consistency across distros** → Confirms systematic issue
 
 ## Issue Description
 
@@ -36,35 +43,46 @@ When running a minimal Express.js server on Bun, HTTP-related objects accumulate
 
 ## 🚀 **Quick Start - Run All Tests**
 
-### **Complete 4-Way Analysis**
+### **Complete 7-Way Analysis**
+```bash
+./run-comprehensive-tests.sh
+```
+**Estimated time**: ~25-35 minutes total  
+**What it does**: Runs all seven test environments and provides comprehensive containerization analysis.
+
+### **Original 4-Way Analysis**
 ```bash
 ./run-all-tests.sh
 ```
 **Estimated time**: ~12-20 minutes total  
-**What it does**: Runs all four test environments and provides comprehensive comparison analysis.
+**What it does**: Runs the core four test environments (Local, Docker, Node.js, Bun-in-Node).
 
 ### **Individual Test Options**
 ```bash
-# Local Bun only (~3-5 min)
-./run-all-tests.sh --local-only
+# Core tests
+./run-comprehensive-tests.sh --local-only       # Local Bun (~3-5 min)
+./run-comprehensive-tests.sh --docker-only      # Docker Bun (~3-5 min)  
+./run-comprehensive-tests.sh --node-only        # Node.js control (~3-5 min)
+./run-comprehensive-tests.sh --node-bun-only    # Bun-in-Node isolation (~3-5 min)
 
-# Docker Bun only (~3-5 min)  
-./run-all-tests.sh --docker-only
-
-# Node.js control test only (~3-5 min)
-./run-all-tests.sh --node-only
-
-# Bun-in-Node isolation test only (~3-5 min)
-./run-all-tests.sh --node-bun-only
+# Container distribution tests
+./run-comprehensive-tests.sh --ubuntu-bun-only  # Ubuntu + Bun (~3-5 min)
+./run-comprehensive-tests.sh --debian-bun-only  # Debian + Bun (~3-5 min)
+./run-comprehensive-tests.sh --alpine-bun-only  # Alpine + Bun (~3-5 min)
 ```
 
 ### **Direct Test Execution**
 ```bash
-# Individual test scripts
+# Core test scripts
 ./test-reproduction-local.sh      # Local Bun
 ./test-reproduction.sh            # Docker Bun  
 ./test-docker-node.sh             # Node.js 24.0.2
-./test-docker-node-bun.sh         # Bun-in-Node.js (NEW!)
+./test-docker-node-bun.sh         # Bun-in-Node.js isolation
+
+# Container distribution tests
+./test-docker-ubuntu-bun.sh       # Ubuntu + Bun
+./test-docker-debian-bun.sh       # Debian + Bun
+./test-docker-alpine-bun.sh       # Alpine + Bun
 ```
 
 ## What the Automated Tests Do
@@ -117,23 +135,21 @@ HTTP-related objects should be garbage collected after requests complete, mainta
 
 **Result**: ~1.3 objects leaked per request, with no garbage collection occurring.
 
-### **4-Way Comparison Matrix**
+### **7-Way Comprehensive Comparison Matrix**
 
-After running all tests, you'll get a comparison like:
+After running the comprehensive tests, you'll get a comparison like:
 
 ```
 Environment: Local Bun
 Duration: 15s
 Memory growth: RSS +45MB, HeapUsed +32MB
-Headers leak: +1284
-Responses leak: +1284
+Headers leak: +1284, Responses leak: +1284
 Severity: critical
 
 Environment: Docker Bun  
 Duration: 18s
 Memory growth: RSS +52MB, HeapUsed +38MB
-Headers leak: +1298
-Responses leak: +1298
+Headers leak: +1298, Responses leak: +1298
 Severity: critical
 
 Environment: Node.js 24.0.2 Docker
@@ -144,12 +160,33 @@ Severity: none
 Environment: Bun-in-Node.js Docker
 Duration: 16s
 Memory growth: RSS +48MB, HeapUsed +35MB
-Headers leak: +1291
-Responses leak: +1291
+Headers leak: +1291, Responses leak: +1291
+Severity: critical
+
+Environment: Ubuntu + Bun Docker
+Duration: 17s
+Memory growth: RSS +49MB, HeapUsed +36MB
+Headers leak: +1287, Responses leak: +1287
+Severity: critical
+
+Environment: Debian + Bun Docker
+Duration: 16s
+Memory growth: RSS +47MB, HeapUsed +34MB
+Headers leak: +1293, Responses leak: +1293
+Severity: critical
+
+Environment: Alpine + Bun Docker
+Duration: 19s
+Memory growth: RSS +51MB, HeapUsed +37MB
+Headers leak: +1289, Responses leak: +1289
 Severity: critical
 ```
 
-**Analysis**: If Bun-in-Node shows leaks (like above), it confirms this is a **Bun runtime issue**, not containerization.
+**Critical Analysis**: 
+- **Bun-in-Node leaks** → Confirms **Bun runtime issue**
+- **All container distros leak consistently** → Not distribution-specific
+- **Local vs Container pattern** → Containerization triggers the bug
+- **Node.js clean** → Proper garbage collection reference
 
 ## Memory Monitoring
 
@@ -249,14 +286,21 @@ The leak appears to be at the fundamental HTTP request/response handling level i
 ### Docker Configurations
 - `Dockerfile` - Official Bun image setup
 - `Dockerfile.node` - Node.js 24.0.2 with experimental TypeScript support
-- `Dockerfile.node-bun` - **NEW!** Node.js base with Bun runtime installed
+- `Dockerfile.node-bun` - Node.js base with Bun runtime installed (isolation test)
+- `Dockerfile.ubuntu-bun` - **NEW!** Ubuntu 22.04 + Bun installation
+- `Dockerfile.debian-bun` - **NEW!** Debian 12-slim + Bun installation  
+- `Dockerfile.alpine-bun` - **NEW!** Alpine 3.19 + Bun installation
 
 ### Test Scripts
-- `run-all-tests.sh` - **Master test runner** (all 4 environments)
+- `run-comprehensive-tests.sh` - **NEW!** Complete 7-way test matrix
+- `run-all-tests.sh` - Original 4-way test runner (Local, Docker, Node.js, Bun-in-Node)
 - `test-reproduction-local.sh` - Local Bun test
 - `test-reproduction.sh` - Docker Bun test  
 - `test-docker-node.sh` - Node.js 24.0.2 test
-- `test-docker-node-bun.sh` - **NEW!** Bun-in-Node.js isolation test
+- `test-docker-node-bun.sh` - Bun-in-Node.js isolation test
+- `test-docker-ubuntu-bun.sh` - **NEW!** Ubuntu + Bun container test
+- `test-docker-debian-bun.sh` - **NEW!** Debian + Bun container test
+- `test-docker-alpine-bun.sh` - **NEW!** Alpine + Bun container test
 
 ### Documentation
 - `README.md` - This comprehensive documentation
@@ -265,8 +309,18 @@ The leak appears to be at the fundamental HTTP request/response handling level i
 
 ### **Automated Testing Scripts**
 ```bash
-# Master test runner with all options
-./run-all-tests.sh                  # All 4 tests (~12-20 min)
+# Comprehensive 7-way test matrix
+./run-comprehensive-tests.sh                    # All 7 tests (~25-35 min)
+./run-comprehensive-tests.sh --local-only       # Local Bun only
+./run-comprehensive-tests.sh --docker-only      # Docker Bun only  
+./run-comprehensive-tests.sh --node-only        # Node.js only
+./run-comprehensive-tests.sh --node-bun-only    # Bun-in-Node only
+./run-comprehensive-tests.sh --ubuntu-bun-only  # Ubuntu + Bun only
+./run-comprehensive-tests.sh --debian-bun-only  # Debian + Bun only
+./run-comprehensive-tests.sh --alpine-bun-only  # Alpine + Bun only
+
+# Original 4-way test runner
+./run-all-tests.sh                  # Core 4 tests (~12-20 min)
 ./run-all-tests.sh --local-only     # Local Bun only
 ./run-all-tests.sh --docker-only    # Docker Bun only  
 ./run-all-tests.sh --node-only      # Node.js only
@@ -277,6 +331,9 @@ The leak appears to be at the fundamental HTTP request/response handling level i
 ./test-reproduction.sh              # Docker Bun
 ./test-docker-node.sh               # Node.js 24.0.2
 ./test-docker-node-bun.sh           # Bun-in-Node.js
+./test-docker-ubuntu-bun.sh         # Ubuntu + Bun
+./test-docker-debian-bun.sh         # Debian + Bun
+./test-docker-alpine-bun.sh         # Alpine + Bun
 ```
 
 ### **Manual Development Scripts**
@@ -296,9 +353,10 @@ bun run docker:run:node       # Run Node.js container
 ### **Test Features**
 
 The automated test scripts provide:
-- **4-Way Environment Testing**: Local Bun, Docker Bun, Node.js, Bun-in-Node
+- **7-Way Environment Testing**: Local Bun, Docker Bun, Node.js, Bun-in-Node, Ubuntu+Bun, Debian+Bun, Alpine+Bun
 - **Dual Metric Tracking**: Memory usage (MB) + Object counts
 - **Runtime Isolation**: Bun-in-Node test isolates runtime vs containerization issues
+- **Distribution Analysis**: Ubuntu/Debian/Alpine tests isolate Linux-specific effects
 - **Leak Rate Calculation**: Objects leaked per request for each type
 - **Severity Classification**: Critical/Moderate/None based on leak thresholds
 - **Continued Growth Detection**: Monitors background memory growth after load test
@@ -306,18 +364,25 @@ The automated test scripts provide:
 - **Automatic Cleanup**: Guaranteed cleanup of processes and containers
 - **Detailed Reporting**: Summary with actionable metrics for bug reports
 
-## **Key Insights from 4-Way Testing**
+## **Key Insights from 7-Way Testing**
 
-1. **If Local Bun shows no leaks but Docker Bun does**: Containerization issue
-2. **If both Bun environments show leaks but Bun-in-Node doesn't**: Bun Docker image issue
-3. **If Bun-in-Node shows leaks**: **Confirmed Bun runtime issue** 
-4. **If Node.js shows leaks**: Something wrong with the test (shouldn't happen)
+### **Runtime vs Containerization Analysis**
+1. **If Local Bun shows no leaks but all containers do**: Containerization triggers bug
+2. **If Bun-in-Node shows leaks**: **DEFINITIVE Bun runtime issue** 
+3. **If Node.js shows leaks**: Something wrong with the test (shouldn't happen)
 
-This matrix definitively isolates whether the issue is:
-- ✅ **Bun runtime** (most likely based on current evidence)
-- ❌ **Bun Docker environment** 
-- ❌ **General containerization**
-- ❌ **Test methodology**
+### **Distribution-Specific Analysis**
+4. **If all Linux distros leak consistently**: General containerization issue, not distro-specific
+5. **If specific distros leak differently**: Distribution-specific trigger identified
+6. **If Alpine (minimal) leaks same as Ubuntu/Debian**: Not related to bloated base images
+
+### **Definitive Isolation Matrix**
+This comprehensive matrix definitively isolates whether the issue is:
+- ✅ **Bun runtime** (most likely - confirmed if Bun-in-Node leaks)
+- ❌ **Bun Docker environment** (ruled out if Bun-in-Node leaks)
+- ❌ **Specific Linux distribution** (ruled out if all distros leak consistently)
+- ❌ **General containerization** (ruled out if local is clean)
+- ❌ **Test methodology** (ruled out if Node.js is clean)
 
 ## Contributing
 
@@ -334,5 +399,9 @@ Please include the following when reporting:
 
 **Run the complete test suite and share all results for comprehensive analysis:**
 ```bash
+# Comprehensive 7-way analysis (recommended)
+./run-comprehensive-tests.sh > memory-leak-results-comprehensive.txt 2>&1
+
+# Original 4-way analysis  
 ./run-all-tests.sh > memory-leak-results.txt 2>&1
 ``` 
